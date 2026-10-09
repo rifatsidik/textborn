@@ -137,7 +137,15 @@ func _process(delta: float) -> void:
                 continue
         elif bpos.distance_to(player) < PLAYER_RADIUS + 6.0:
             if deflect_clock > 0.0:
-                var reflected := (bpos - player).normalized()
+                var target := player + (-(bullet["vel"] as Vector2)).normalized() * 500.0
+                var nearest_distance := INF
+                for enemy_target in enemies:
+                    var candidate: Vector2 = enemy_target["pos"]
+                    var candidate_distance := player.distance_squared_to(candidate)
+                    if candidate_distance < nearest_distance:
+                        nearest_distance = candidate_distance
+                        target = candidate
+                var reflected := (target - player).normalized()
                 bullet["vel"] = reflected * 560.0
                 bullet["friendly"] = true
                 bullet["life"] = 2.0
@@ -222,7 +230,11 @@ func _burst(pos: Vector2, color: Color, count: int) -> void:
         particles.append({"pos": pos, "vel": Vector2.RIGHT.rotated(angle) * speed, "life": randf_range(0.18, 0.55), "color": color})
 
 func _input(event: InputEvent) -> void:
-    if event is InputEventScreenTouch:
+    if event is InputEventScreenDrag:
+        if touch_ids.has(event.index):
+            touch_ids[event.index] = event.position
+            _update_touch_move()
+    elif event is InputEventScreenTouch:
         if event.pressed:
             if game_over:
                 _restart()
