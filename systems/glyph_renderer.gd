@@ -45,15 +45,15 @@ func _draw() -> void:
 
     # Neck, shoulder slope, rib cage and waist: only perimeter glyphs.
     _path(PackedVector2Array([
-        neck + Vector2(-2.2, -1.0), chest + Vector2(-6.8, -1.0),
-        chest + Vector2(-10.0, 2.0), chest + Vector2(-8.5, 12.0),
-        pelvis + Vector2(-5.4, -1.0), pelvis + Vector2(5.4, -1.0),
-        chest + Vector2(8.5, 12.0), chest + Vector2(10.0, 2.0),
-        chest + Vector2(6.8, -1.0), neck + Vector2(2.2, -1.0)
+        neck + Vector2(-2.2, -1.0), chest + Vector2(-5.8, -1.0),
+        chest + Vector2(-8.0, 2.0), chest + Vector2(-7.0, 12.0),
+        pelvis + Vector2(-4.2, -1.0), pelvis + Vector2(4.2, -1.0),
+        chest + Vector2(7.0, 12.0), chest + Vector2(8.0, 2.0),
+        chest + Vector2(5.8, -1.0), neck + Vector2(2.2, -1.0)
     ]), ink, 11, true)
-    _path(PackedVector2Array([pelvis + Vector2(-5.4, -1), pelvis + Vector2(-3.5, 5), pelvis + Vector2(0, 8), pelvis + Vector2(3.5, 5), pelvis + Vector2(5.4, -1)]), ink, 19, false)
-    _path(PackedVector2Array([chest + Vector2(-4.5, 8), chest + Vector2(4.5, 8)]), dim, 23, false)
-    _path(PackedVector2Array([chest + Vector2(-3.5, 16), chest + Vector2(3.5, 16)]), dim, 29, false)
+    _path(PackedVector2Array([pelvis + Vector2(-4.2, -1), pelvis + Vector2(-2.8, 4), pelvis + Vector2(0, 6), pelvis + Vector2(2.8, 4), pelvis + Vector2(4.2, -1)]), ink, 19, false)
+    _path(PackedVector2Array([chest + Vector2(-3.2, 8), chest + Vector2(3.2, 8)]), dim, 23, false)
+    _path(PackedVector2Array([chest + Vector2(-2.8, 16), chest + Vector2(2.8, 16)]), dim, 29, false)
 
     # Limbs are drawn as paired contour rails, not filled glyph tubes.
     _limb(ls, le, 3.0, ink, 31)
@@ -61,16 +61,16 @@ func _draw() -> void:
     _limb(rs, re, 3.0, ink, 41)
     _limb(re, rh, 2.0, ink, 43)
     # Far leg is quieter and drawn first; the near leg carries the clear contour.
-    _limb(lhip, lk, 2.6, dim, 47)
-    _limb(lk, la, 2.0, dim, 53)
-    _limb(rhip, rk, 3.0, ink, 59)
-    _limb(rk, ra, 2.3, ink, 61)
+    _limb(lhip, lk, 2.5, dim, 47)
+    _limb(lk, la, 2.1, dim, 53)
+    _limb(rhip, rk, 2.5, ink, 59)
+    _limb(rk, ra, 2.1, ink, 61)
 
     # Hands and feet: short contour strokes only.
     _path(PackedVector2Array([lh + Vector2(-1, -1), lh + Vector2(1, 2), lh + Vector2(2, 4)]), ink, 67, false)
     _path(PackedVector2Array([rh + Vector2(-1, -1), rh + Vector2(1, 2), rh + Vector2(2, 4)]), ink, 71, false)
-    _path(PackedVector2Array([la + Vector2(-1, 0), la + Vector2(4, 0.5), la + Vector2(6, 1.5)]), dim, 73, false)
-    _path(PackedVector2Array([ra + Vector2(-2, 0), ra + Vector2(5, 0), ra + Vector2(7, 1)]), ink, 79, false)
+    _path(PackedVector2Array([la + Vector2(-1.5, 0), la + Vector2(3.5, 0.4), la + Vector2(5.5, 1.2)]), dim, 73, false)
+    _path(PackedVector2Array([ra + Vector2(-1.5, 0), ra + Vector2(3.5, 0.4), ra + Vector2(5.5, 1.2)]), ink, 79, false)
 
 func _ellipse_outline(center: Vector2, radius: Vector2, color: Color, seed: int) -> void:
     const COUNT := 32
