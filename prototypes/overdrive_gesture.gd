@@ -392,7 +392,8 @@ func _draw() -> void:
             var is_current := i == sequence_step
             draw_rect(rect, Color("#4a3d17") if is_current else Color("#17243a"), true)
             draw_rect(rect, GOLD if is_current else Color("#52617b"), false, 2.0)
-            var token := "×2" if sequence[i] == 4 else DIR_ICONS[sequence[i]]
+            var gesture_id: int = int(sequence[i])
+            var token: String = "×2" if gesture_id == 4 else str(DIR_ICONS[gesture_id])
             draw_string(ThemeDB.fallback_font, Vector2(rect.position.x + 36, rect.position.y + 49), token, HORIZONTAL_ALIGNMENT_CENTER, -1, 30, Color.WHITE if is_current else Color("#91a0bd"))
         var timer_w := 320.0 * clampf(sequence_timer / maxf(sequence_window, 0.01), 0.0, 1.0)
         draw_rect(Rect2(size.x * 0.5 - 160, 278, 320, 8), Color("#202b40"), true)
