@@ -72,7 +72,7 @@ func _make_hud() -> void:
     add_child(hud)
 
     hint = Label.new()
-    hint.text = "A / D  MOVE     SPACE  JUMP     E  GRAPPLE / RELEASE     R  RESET"
+    hint.text = "A / D  MOVE     SPACE  JUMP     E  GRAPPLE     Q  RELEASE     R  RESET"
     hint.position = Vector2(24, 43)
     hint.add_theme_color_override("font_color", Color(0.72, 0.79, 0.88))
     hint.add_theme_font_size_override("font_size", 13)
