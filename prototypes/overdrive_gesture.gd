@@ -24,6 +24,10 @@ var banner_timer := 3.0
 var move_touch := false
 var touch_origin := Vector2.ZERO
 var touch_pos := Vector2.ZERO
+var gesture_touch_start := Vector2.ZERO
+var gesture_touch_tracking := false
+var gesture_mouse_start := Vector2.ZERO
+var gesture_mouse_tracking := false
 var attack_timer := 0.0
 var execution := false
 var sequence: Array[int] = []
@@ -144,23 +148,25 @@ func _input(event: InputEvent) -> void:
             return
         if event.pressed:
             if execution:
-                _register_tap(event.position)
+                gesture_touch_start = event.position
+                gesture_touch_tracking = true
             elif event.position.x < view_size.x * 0.43:
                 move_touch = true
                 touch_origin = event.position
                 touch_pos = event.position
             elif Rect2(view_size.x - 255, view_size.y - 135, 225, 100).has_point(event.position):
                 _start_execution()
-            else:
-                _register_tap(event.position)
         else:
+            if execution and gesture_touch_tracking:
+                var swipe_delta: Vector2 = event.position - gesture_touch_start
+                if swipe_delta.length() >= 24.0:
+                    _gesture_from_vector(swipe_delta)
+                else:
+                    _register_tap(event.position)
+            gesture_touch_tracking = false
             move_touch = false
-    elif event is InputEventScreenDrag:
-        if execution:
-            var delta: Vector2 = event.position - event.relative
-            _gesture_from_vector(event.relative)
-        elif move_touch:
-            touch_pos = event.position
+    elif event is InputEventScreenDrag and move_touch:
+        touch_pos = event.position
     elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
             if game_over:
@@ -168,9 +174,16 @@ func _input(event: InputEvent) -> void:
             elif not execution and Rect2(view_size.x - 255, view_size.y - 135, 225, 100).has_point(event.position):
                 _start_execution()
             elif execution:
-                _register_tap(event.position)
-    elif event is InputEventMouseMotion and execution and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-        _gesture_from_vector(event.relative)
+                gesture_mouse_start = event.position
+                gesture_mouse_tracking = true
+        else:
+            if execution and gesture_mouse_tracking:
+                var mouse_delta: Vector2 = event.position - gesture_mouse_start
+                if mouse_delta.length() >= 24.0:
+                    _gesture_from_vector(mouse_delta)
+                else:
+                    _register_tap(event.position)
+            gesture_mouse_tracking = false
 
 func _register_tap(pos: Vector2) -> void:
     if not execution:
