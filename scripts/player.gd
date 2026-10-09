@@ -52,7 +52,8 @@ func _physics_process(delta: float) -> void:
     walk_blend = move_toward(walk_blend, 1.0 if moving else 0.0, delta * 3.8)
     if moving:
         # One full gait cycle per stride rhythm; restrained cadence.
-        gait_phase = fposmod(gait_phase + delta * 7.0 * clampf(absf(velocity.x) / WALK_SPEED, 0.0, 1.0), TAU)
+        var gait_rate := (TAU * absf(velocity.x)) / 62.0
+        gait_phase = fposmod(gait_phase + delta * gait_rate, TAU)
 
     move_and_slide()
     _update_visual()
