@@ -60,15 +60,16 @@ func _draw() -> void:
     _limb(le, lh, 2.0, ink, 37)
     _limb(rs, re, 3.0, ink, 41)
     _limb(re, rh, 2.0, ink, 43)
-    _limb(lhip, lk, 3.2, ink, 47)
-    _limb(lk, la, 2.5, ink, 53)
-    _limb(rhip, rk, 3.2, ink, 59)
-    _limb(rk, ra, 2.5, ink, 61)
+    # Far leg is quieter and drawn first; the near leg carries the clear contour.
+    _limb(lhip, lk, 2.6, dim, 47)
+    _limb(lk, la, 2.0, dim, 53)
+    _limb(rhip, rk, 3.0, ink, 59)
+    _limb(rk, ra, 2.3, ink, 61)
 
     # Hands and feet: short contour strokes only.
     _path(PackedVector2Array([lh + Vector2(-1, -1), lh + Vector2(1, 2), lh + Vector2(2, 4)]), ink, 67, false)
     _path(PackedVector2Array([rh + Vector2(-1, -1), rh + Vector2(1, 2), rh + Vector2(2, 4)]), ink, 71, false)
-    _path(PackedVector2Array([la + Vector2(-2, 0), la + Vector2(5, 0), la + Vector2(7, 1)]), ink, 73, false)
+    _path(PackedVector2Array([la + Vector2(-1, 0), la + Vector2(4, 0.5), la + Vector2(6, 1.5)]), dim, 73, false)
     _path(PackedVector2Array([ra + Vector2(-2, 0), ra + Vector2(5, 0), ra + Vector2(7, 1)]), ink, 79, false)
 
 func _ellipse_outline(center: Vector2, radius: Vector2, color: Color, seed: int) -> void:
