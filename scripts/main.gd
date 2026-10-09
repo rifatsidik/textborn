@@ -1,268 +1,357 @@
 extends Node2D
 
-# CRUSH//CORE - small touch-first destruction prototype.
-# Tap anywhere to launch an energy core at the tower.
-const BLOCK_SIZE := Vector2(38.0, 30.0)
-const SHOT_COOLDOWN := 0.42
+# REBOUND: landscape arena survival. Reflect hostile shots back at enemies.
+const PLAYER_RADIUS := 15.0
+const DEFLECT_RADIUS := 82.0
+const DEFLECT_TIME := 0.22
+const PLAYER_SPEED := 290.0
 
-var screen_size := Vector2(720.0, 1280.0)
-var floor_y := 1020.0
-var tower_center := Vector2.ZERO
-var shots_left := 12
+var view := Vector2(1280, 720)
+var player := Vector2.ZERO
+var enemies: Array[Dictionary] = []
+var bullets: Array[Dictionary] = []
+var particles: Array[Dictionary] = []
 var score := 0
-var combo := 0
-var best_combo := 0
-var cooldown := 0.0
+var wave := 1
+var hp := 3
+var spawn_clock := 0.0
+var fire_clock := 0.0
+var deflect_clock := 0.0
+var dash_clock := 0.0
+var dash_cooldown := 0.0
+var hurt_flash := 0.0
 var game_over := false
-var blocks: Array[RigidBody2D] = []
-var projectiles: Array[RigidBody2D] = []
-var shockwaves: Array[Dictionary] = []
-var message := "TAP TO SMASH"
-var message_timer := 2.5
-var floor_body: StaticBody2D
+var banner := "MOVE  •  DEFLECT  •  SURVIVE"
+var banner_time := 3.0
+var touch_move := Vector2.ZERO
+var touch_ids := {}
+var mouse_aim := Vector2.ZERO
+var mouse_down := false
 
 func _ready() -> void:
-    screen_size = get_viewport_rect().size
-    # Portrait-first layout, but keep working in desktop landscape.
-    floor_y = screen_size.y * 0.82
-    tower_center = Vector2(screen_size.x * 0.68, floor_y - 155.0)
-    _build_arena()
-    _spawn_tower()
+    view = get_viewport_rect().size
+    player = Vector2(view.x * 0.5, view.y * 0.55)
+    _reset_enemies()
     queue_redraw()
 
-func _build_arena() -> void:
-    floor_body = StaticBody2D.new()
-    floor_body.name = "Floor"
-    floor_body.position = Vector2(screen_size.x * 0.5, floor_y + 28.0)
-    add_child(floor_body)
-    var floor_shape := CollisionShape2D.new()
-    var rect := RectangleShape2D.new()
-    rect.size = Vector2(screen_size.x * 1.5, 56.0)
-    floor_shape.shape = rect
-    floor_body.add_child(floor_shape)
+func _reset_enemies() -> void:
+    enemies.clear()
+    bullets.clear()
+    for i in range(3):
+        _spawn_enemy(i % 2)
 
-func _spawn_tower() -> void:
-    for old_block in blocks:
-        if is_instance_valid(old_block):
-            old_block.queue_free()
-    blocks.clear()
-    var columns := 5
-    var rows := 6
-    var bw := minf(42.0, screen_size.x * 0.09)
-    var bh := 30.0
-    var gap := 2.0
-    var start_x := tower_center.x - (columns * (bw + gap) - gap) * 0.5
-    for row in range(rows):
-        for col in range(columns):
-            var block := RigidBody2D.new()
-            block.name = "Block_%d_%d" % [row, col]
-            block.position = Vector2(start_x + col * (bw + gap) + bw * 0.5, floor_y - 28.0 - row * (bh + gap) - bh * 0.5)
-            block.mass = 0.8
-            block.gravity_scale = 1.0
-            block.linear_damp = 0.15
-            block.angular_damp = 0.2
-            block.set_meta("is_tower_block", true)
-            add_child(block)
-            var collision := CollisionShape2D.new()
-            var shape := RectangleShape2D.new()
-            shape.size = Vector2(bw, bh)
-            collision.shape = shape
-            block.add_child(collision)
-            var block_visual := BlockVisual.new()
-            block_visual.block_size = Vector2(bw, bh)
-            block.add_child(block_visual)
-            blocks.append(block)
+func _spawn_enemy(kind: int = -1) -> void:
+    if kind < 0:
+        kind = randi_range(0, 2)
+    var edge := randi_range(0, 3)
+    var pos := Vector2.ZERO
+    if edge == 0:
+        pos = Vector2(randf_range(80, view.x - 80), 100)
+    elif edge == 1:
+        pos = Vector2(view.x - 45, randf_range(120, view.y - 90))
+    elif edge == 2:
+        pos = Vector2(randf_range(80, view.x - 80), view.y - 75)
+    else:
+        pos = Vector2(45, randf_range(120, view.y - 90))
+    enemies.append({"pos": pos, "hp": 1 if kind == 0 else (2 if kind == 1 else 3), "kind": kind, "speed": randf_range(52.0, 88.0) + wave * 2.0, "fire": randf_range(0.7, 1.8), "phase": randf_range(0.0, TAU)})
 
 func _process(delta: float) -> void:
-    cooldown = maxf(0.0, cooldown - delta)
-    message_timer = maxf(0.0, message_timer - delta)
-    for i in range(shockwaves.size() - 1, -1, -1):
-        shockwaves[i]["radius"] = float(shockwaves[i]["radius"]) + delta * 420.0
-        shockwaves[i]["alpha"] = float(shockwaves[i]["alpha"]) - delta * 1.4
-        if float(shockwaves[i]["alpha"]) <= 0.0:
-            shockwaves.remove_at(i)
-    _check_blocks()
+    if game_over:
+        queue_redraw()
+        return
+    banner_time = maxf(0.0, banner_time - delta)
+    deflect_clock = maxf(0.0, deflect_clock - delta)
+    dash_clock = maxf(0.0, dash_clock - delta)
+    dash_cooldown = maxf(0.0, dash_cooldown - delta)
+    hurt_flash = maxf(0.0, hurt_flash - delta)
+    spawn_clock += delta
+    fire_clock += delta
+
+    var move := Vector2.ZERO
+    move.x = Input.get_axis("ui_left", "ui_right")
+    move.y = Input.get_axis("ui_up", "ui_down")
+    if Input.is_key_pressed(KEY_A): move.x -= 1.0
+    if Input.is_key_pressed(KEY_D): move.x += 1.0
+    if Input.is_key_pressed(KEY_W): move.y -= 1.0
+    if Input.is_key_pressed(KEY_S): move.y += 1.0
+    move += touch_move
+    if move.length() > 1.0:
+        move = move.normalized()
+    var speed := PLAYER_SPEED * (2.7 if dash_clock > 0.0 else 1.0)
+    player += move * speed * delta
+    player.x = clampf(player.x, 28.0, view.x - 28.0)
+    player.y = clampf(player.y, 90.0, view.y - 30.0)
+
+    if Input.is_key_pressed(KEY_SPACE) or Input.is_key_pressed(KEY_SHIFT):
+        _start_dash()
+    if Input.is_key_pressed(KEY_E):
+        _start_deflect()
+    if fire_clock > 0.8:
+        fire_clock = 0.0
+        _auto_fire()
+
+    for i in range(enemies.size() - 1, -1, -1):
+        var enemy: Dictionary = enemies[i]
+        var epos: Vector2 = enemy["pos"]
+        var to_player := player - epos
+        var dist := maxf(1.0, to_player.length())
+        var kind: int = enemy["kind"]
+        var approach := 0.55 if kind == 1 else 1.0
+        epos += to_player / dist * float(enemy["speed"]) * approach * delta
+        enemy["phase"] = float(enemy["phase"]) + delta * 2.0
+        enemy["fire"] = float(enemy["fire"]) - delta
+        if int(enemy["hp"]) >= 2 and float(enemy["fire"]) <= 0.0:
+            enemy["fire"] = maxf(0.55, 1.6 - wave * 0.04)
+            _shoot(epos, (player - epos).normalized())
+        enemy["pos"] = epos
+        enemies[i] = enemy
+        var collision_radius := 26.0 if kind == 2 else 20.0
+        if epos.distance_to(player) < collision_radius + PLAYER_RADIUS and dash_clock <= 0.0:
+            _hurt_player()
+            var knock := (epos - player).normalized()
+            enemy["pos"] = epos + knock * 42.0
+            enemies[i] = enemy
+
+    for i in range(bullets.size() - 1, -1, -1):
+        var bullet: Dictionary = bullets[i]
+        bullet["pos"] = (bullet["pos"] as Vector2) + (bullet["vel"] as Vector2) * delta
+        bullet["life"] = float(bullet["life"]) - delta
+        var bpos: Vector2 = bullet["pos"]
+        if bool(bullet["friendly"]):
+            var removed := false
+            for j in range(enemies.size() - 1, -1, -1):
+                var e: Dictionary = enemies[j]
+                if (e["pos"] as Vector2).distance_to(bpos) < (25.0 if int(e["kind"]) == 2 else 19.0):
+                    _burst(bpos, Color("#ff5e65"), 12)
+                    score += 100
+                    e["hp"] = int(e["hp"]) - 1
+                    if int(e["hp"]) <= 0:
+                        enemies.remove_at(j)
+                        score += 150
+                    else:
+                        enemies[j] = e
+                    removed = true
+                    break
+            if removed:
+                bullets.remove_at(i)
+                continue
+        elif bpos.distance_to(player) < PLAYER_RADIUS + 6.0:
+            if deflect_clock > 0.0:
+                var reflected := (bpos - player).normalized()
+                bullet["vel"] = reflected * 560.0
+                bullet["friendly"] = true
+                bullet["life"] = 2.0
+                bullets[i] = bullet
+                _burst(player, Color("#78f4ff"), 10)
+                score += 25
+                banner = "PERFECT REFLECT!"
+                banner_time = 0.6
+            else:
+                bullets.remove_at(i)
+                _hurt_player()
+                continue
+        if float(bullet["life"]) <= 0.0 or bpos.x < -40 or bpos.x > view.x + 40 or bpos.y < 70 or bpos.y > view.y + 40:
+            bullets.remove_at(i)
+        else:
+            bullets[i] = bullet
+
+    for i in range(particles.size() - 1, -1, -1):
+        particles[i]["pos"] = (particles[i]["pos"] as Vector2) + (particles[i]["vel"] as Vector2) * delta
+        particles[i]["life"] = float(particles[i]["life"]) - delta
+        if float(particles[i]["life"]) <= 0.0:
+            particles.remove_at(i)
+
+    if spawn_clock >= maxf(0.65, 2.0 - wave * 0.08) and enemies.size() < 4 + wave:
+        spawn_clock = 0.0
+        _spawn_enemy()
+    if score >= wave * 800:
+        wave += 1
+        banner = "WAVE %02d" % wave
+        banner_time = 1.5
+        for n in range(mini(2, wave)):
+            _spawn_enemy()
     queue_redraw()
 
+func _shoot(pos: Vector2, direction: Vector2) -> void:
+    bullets.append({"pos": pos, "vel": direction * 190.0, "friendly": false, "life": 4.0})
+
+func _auto_fire() -> void:
+    if enemies.is_empty():
+        return
+    var target_pos: Vector2 = enemies[0]["pos"]
+    var best := player.distance_squared_to(target_pos)
+    for e in enemies:
+        var d := player.distance_squared_to(e["pos"])
+        if d < best:
+            best = d
+            target_pos = e["pos"]
+    var direction := (target_pos - player).normalized()
+    bullets.append({"pos": player + direction * 20.0, "vel": direction * 360.0, "friendly": true, "life": 1.5})
+
+func _start_deflect() -> void:
+    if deflect_clock <= 0.0:
+        deflect_clock = DEFLECT_TIME
+        banner = "DEFLECT!"
+        banner_time = 0.3
+
+func _start_dash() -> void:
+    if dash_cooldown > 0.0:
+        return
+    dash_clock = 0.16
+    dash_cooldown = 1.0
+    _burst(player, Color("#8b9dff"), 8)
+
+func _hurt_player() -> void:
+    if hurt_flash > 0.0 or dash_clock > 0.0:
+        return
+    hp -= 1
+    hurt_flash = 0.8
+    _burst(player, Color("#ff5e65"), 18)
+    if hp <= 0:
+        game_over = true
+        banner = "SIGNAL LOST  •  TAP TO RETRY"
+        banner_time = 999.0
+    else:
+        banner = "HULL HIT  •  %d LEFT" % hp
+        banner_time = 0.8
+
+func _burst(pos: Vector2, color: Color, count: int) -> void:
+    for i in range(count):
+        var angle := randf_range(0.0, TAU)
+        var speed := randf_range(45.0, 220.0)
+        particles.append({"pos": pos, "vel": Vector2.RIGHT.rotated(angle) * speed, "life": randf_range(0.18, 0.55), "color": color})
+
 func _input(event: InputEvent) -> void:
-    if event is InputEventScreenTouch and event.pressed:
-        _handle_tap(event.position)
-    elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-        _handle_tap(event.position)
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            if game_over:
+                _restart()
+                return
+            if event.position.x > view.x * 0.72 and event.position.y > view.y * 0.58:
+                _start_deflect()
+            elif event.position.x > view.x * 0.72 and event.position.y > view.y * 0.32:
+                _start_dash()
+            else:
+                touch_ids[event.index] = event.position
+                _update_touch_move()
+        else:
+            touch_ids.erase(event.index)
+            _update_touch_move()
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        if event.pressed:
+            if game_over:
+                _restart()
+            elif event.position.x > view.x * 0.78 and event.position.y > view.y * 0.6:
+                _start_deflect()
+            elif event.position.x > view.x * 0.78 and event.position.y > view.y * 0.35:
+                _start_dash()
+            else:
+                mouse_down = true
+                mouse_aim = event.position
+        else:
+            mouse_down = false
+    elif event is InputEventMouseMotion and mouse_down:
+        mouse_aim = event.position
     elif event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_R:
             _restart()
-        elif event.keycode == KEY_SPACE:
-            _fire_core()
+        elif event.keycode == KEY_E:
+            _start_deflect()
+        elif event.keycode == KEY_SPACE or event.keycode == KEY_SHIFT:
+            _start_dash()
 
-func _handle_tap(pos: Vector2) -> void:
-    if pos.y < 95.0 and pos.x > screen_size.x * 0.68:
-        _restart()
-        return
-    if game_over:
-        _restart()
-        return
-    _fire_core()
-
-func _fire_core() -> void:
-    if cooldown > 0.0 or game_over:
-        return
-    if shots_left <= 0:
-        game_over = true
-        message = "OUT OF CORES  •  TAP TO RETRY"
-        message_timer = 99.0
-        return
-    shots_left -= 1
-    cooldown = SHOT_COOLDOWN
-    var orb := RigidBody2D.new()
-    orb.name = "EnergyCore"
-    orb.position = Vector2(screen_size.x * 0.13, floor_y - 110.0)
-    orb.mass = 2.8
-    orb.gravity_scale = 0.12
-    orb.linear_damp = 0.05
-    orb.collision_layer = 2
-    orb.collision_mask = 1
-    orb.contact_monitor = true
-    orb.max_contacts_reported = 4
-    add_child(orb)
-    var collision := CollisionShape2D.new()
-    var circle := CircleShape2D.new()
-    circle.radius = 15.0
-    collision.shape = circle
-    orb.add_child(collision)
-    var visual := CoreVisual.new()
-    orb.add_child(visual)
-    orb.body_entered.connect(_on_projectile_body_entered.bind(orb))
-    projectiles.append(orb)
-    var direction := (Vector2(tower_center.x, floor_y - 100.0) - orb.position).normalized()
-    orb.apply_central_impulse(direction * screen_size.x * 2.1)
-    message = "SMASH!"
-    message_timer = 0.7
-    _make_shockwave(orb.position, 22.0, 0.5)
-    queue_redraw()
-
-func _on_projectile_body_entered(body: Node, orb: RigidBody2D) -> void:
-    if not is_instance_valid(orb):
-        return
-    if body == floor_body:
-        return
-    _explode(orb.global_position, orb)
-    if is_instance_valid(orb):
-        orb.queue_free()
-    projectiles.erase(orb)
-
-func _explode(center: Vector2, source: RigidBody2D = null) -> void:
-    _make_shockwave(center, 24.0, 1.0)
-    var hit_count := 0
-    for block in blocks:
-        if not is_instance_valid(block) or block == source:
-            continue
-        var offset := block.global_position - center
-        var distance := offset.length()
-        var radius := screen_size.x * 0.28
-        if distance < radius:
-            var falloff := 1.0 - distance / radius
-            var push := offset.normalized()
-            if push == Vector2.ZERO:
-                push = Vector2.UP
-            block.apply_central_impulse((push * 500.0 + Vector2.UP * 230.0) * falloff)
-            block.apply_torque_impulse(randf_range(-90.0, 90.0) * falloff)
-            hit_count += 1
-    score += hit_count * 10
-    if hit_count >= 8:
-        combo += 1
-        best_combo = maxi(best_combo, combo)
-        message = "CHAIN SMASH  x%d" % combo
-    else:
-        combo = 0
-        message = "BOOM!"
-    message_timer = 1.1
-    _make_shockwave(center, screen_size.x * 0.24, 0.75)
-    queue_redraw()
-
-func _make_shockwave(pos: Vector2, radius: float, alpha: float) -> void:
-    shockwaves.append({"pos": pos, "radius": radius, "alpha": alpha})
-
-func _check_blocks() -> void:
-    var alive := 0
-    for block in blocks:
-        if is_instance_valid(block):
-            alive += 1
-    if alive == 0 and not game_over:
-        game_over = true
-        message = "TOWER DESTROYED!  TAP TO PLAY AGAIN"
-        message_timer = 99.0
-    elif shots_left <= 0 and projectiles.is_empty() and not game_over:
-        game_over = true
-        message = "ROUND OVER  •  TAP TO RETRY"
-        message_timer = 99.0
+func _update_touch_move() -> void:
+    touch_move = Vector2.ZERO
+    for key in touch_ids.keys():
+        var pos: Vector2 = touch_ids[key]
+        var center := Vector2(view.x * 0.16, view.y * 0.72)
+        var delta := pos - center
+        if delta.length() > 10.0 and pos.x < view.x * 0.42:
+            touch_move = (delta / 72.0).limit_length(1.0)
 
 func _restart() -> void:
-    for orb in projectiles:
-        if is_instance_valid(orb):
-            orb.queue_free()
-    projectiles.clear()
-    for block in blocks:
-        if is_instance_valid(block):
-            block.queue_free()
-    blocks.clear()
-    shots_left = 12
     score = 0
-    combo = 0
-    best_combo = 0
+    wave = 1
+    hp = 3
+    spawn_clock = 0.0
+    fire_clock = 0.0
+    deflect_clock = 0.0
+    dash_clock = 0.0
+    dash_cooldown = 0.0
+    hurt_flash = 0.0
     game_over = false
-    cooldown = 0.0
-    message = "TAP TO SMASH"
-    message_timer = 2.0
-    _spawn_tower()
+    banner = "MOVE  •  DEFLECT  •  SURVIVE"
+    banner_time = 2.0
+    player = Vector2(view.x * 0.5, view.y * 0.55)
+    particles.clear()
+    _reset_enemies()
     queue_redraw()
 
 func _draw() -> void:
-    # Minimal dark arena with a quiet grid and a glowing target.
-    draw_rect(Rect2(Vector2.ZERO, screen_size), Color("#0b0d12"))
-    for x in range(0, int(screen_size.x), 48):
-        draw_line(Vector2(x, 100), Vector2(x, floor_y), Color(0.18, 0.23, 0.30, 0.22), 1.0)
-    for y in range(120, int(floor_y), 48):
-        draw_line(Vector2(0, y), Vector2(screen_size.x, y), Color(0.18, 0.23, 0.30, 0.18), 1.0)
-    draw_rect(Rect2(0, floor_y, screen_size.x, screen_size.y - floor_y), Color("#171b24"))
-    draw_line(Vector2(0, floor_y), Vector2(screen_size.x, floor_y), Color("#7d8799"), 2.0)
-    # Launcher pad
-    var launch_pos := Vector2(screen_size.x * 0.13, floor_y - 110.0)
-    draw_circle(launch_pos, 35.0, Color(0.15, 0.75, 1.0, 0.08))
-    draw_arc(launch_pos, 28.0, 0.0, TAU, 40, Color(0.25, 0.8, 1.0, 0.65), 2.0, true)
-    draw_circle(launch_pos, 5.0, Color("#d7f7ff"))
-    # Target marker
-    draw_arc(Vector2(tower_center.x, floor_y - 118.0), 75.0, 0.0, TAU, 48, Color(1.0, 0.43, 0.24, 0.35), 1.5, true)
-    for wave in shockwaves:
-        var c := Color(1.0, 0.52, 0.26, clampf(float(wave["alpha"]), 0.0, 1.0))
-        draw_arc(wave["pos"], float(wave["radius"]), 0.0, TAU, 48, c, 3.0, true)
+    draw_rect(Rect2(Vector2.ZERO, view), Color("#090c12"))
+    for x in range(0, int(view.x), 48):
+        draw_line(Vector2(x, 70), Vector2(x, view.y), Color(0.20, 0.28, 0.37, 0.18), 1.0)
+    for y in range(80, int(view.y), 48):
+        draw_line(Vector2(0, y), Vector2(view.x, y), Color(0.20, 0.28, 0.37, 0.18), 1.0)
+    draw_rect(Rect2(0, 0, view.x, 64), Color("#101722"))
+    draw_line(Vector2(0, 64), Vector2(view.x, 64), Color("#253344"), 1.0)
+    for bullet in bullets:
+        var pos: Vector2 = bullet["pos"]
+        if bool(bullet["friendly"]):
+            draw_circle(pos, 8.0, Color(0.20, 0.92, 1.0, 0.16))
+            draw_circle(pos, 4.5, Color("#8af6ff"))
+        else:
+            draw_circle(pos, 8.0, Color(1.0, 0.22, 0.32, 0.16))
+            draw_circle(pos, 4.0, Color("#ff6570"))
+    for e in enemies:
+        var pos: Vector2 = e["pos"]
+        var kind: int = e["kind"]
+        var radius := 25.0 if kind == 2 else 18.0
+        var color := Color("#ff5c68") if kind == 0 else (Color("#ff9b50") if kind == 1 else Color("#b46cff"))
+        draw_circle(pos, radius + 8.0, Color(color.r, color.g, color.b, 0.10))
+        if kind == 2:
+            draw_rect(Rect2(pos - Vector2(radius, radius), Vector2(radius * 2, radius * 2)), color, false, 3.0)
+        else:
+            var points := PackedVector2Array()
+            for k in range(3):
+                points.append(pos + Vector2.UP.rotated(float(k) * TAU / 3.0) * radius)
+            draw_colored_polygon(points, color)
+        draw_circle(pos, 4.0, Color("#fff1f1"))
+        for pip in range(int(e["hp"])):
+            draw_circle(pos + Vector2(-8.0 + pip * 8.0, radius + 9.0), 2.0, color)
+    for p in particles:
+        var alpha := clampf(float(p["life"]) * 2.0, 0.0, 1.0)
+        var col: Color = p["color"]
+        col.a = alpha
+        draw_circle(p["pos"], 2.2, col)
+    # Player glow and directional core.
+    var player_color := Color("#ff6a78") if hurt_flash > 0.0 else Color("#eafaff")
+    draw_circle(player, 27.0, Color(0.20, 0.88, 1.0, 0.10))
+    draw_circle(player, 18.0, Color("#47dff5"))
+    draw_circle(player, 10.0, player_color)
+    draw_circle(player, 3.0, Color.WHITE)
+    if deflect_clock > 0.0:
+        draw_arc(player, DEFLECT_RADIUS, 0.0, TAU, 64, Color(0.28, 0.95, 1.0, 0.95), 4.0, true)
     var font := ThemeDB.fallback_font
     if font == null:
         return
-    draw_string(font, Vector2(24, 42), "CRUSH//CORE", HORIZONTAL_ALIGNMENT_LEFT, -1, 25, Color("#eef3ff"))
-    draw_string(font, Vector2(24, 70), "ONE TAP. BIG IMPACT.", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#8d9aaf"))
-    draw_string(font, Vector2(24, 112), "SCORE  %05d" % score, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f2f5fb"))
-    draw_string(font, Vector2(24, 139), "CORES  %02d" % shots_left, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#6fe5ff"))
-    draw_string(font, Vector2(screen_size.x - 98, 42), "RETRY  R", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#aab4c5"))
-    if message_timer > 0.0:
-        var width := screen_size.x
-        draw_string(font, Vector2(0, screen_size.y * 0.22), message, HORIZONTAL_ALIGNMENT_CENTER, width, 19, Color("#ffb58b"))
-    draw_string(font, Vector2(0, screen_size.y - 28), "TAP ANYWHERE TO LAUNCH", HORIZONTAL_ALIGNMENT_CENTER, screen_size.x, 13, Color("#9aa7bc"))
-
-class CoreVisual extends Node2D:
-    func _draw() -> void:
-        draw_circle(Vector2.ZERO, 18.0, Color(0.1, 0.7, 1.0, 0.12))
-        draw_circle(Vector2.ZERO, 12.0, Color(0.15, 0.76, 1.0, 0.3))
-        draw_circle(Vector2.ZERO, 7.0, Color("#8deaff"))
-        draw_circle(Vector2.ZERO, 3.0, Color.WHITE)
-
-
-class BlockVisual extends Node2D:
-    var block_size := Vector2(38.0, 30.0)
-
-    func _draw() -> void:
-        var rect := Rect2(-block_size * 0.5, block_size)
-        draw_rect(rect, Color("#d5dbe6"))
-        draw_rect(Rect2(rect.position, Vector2(block_size.x, 3.0)), Color("#ffffff"))
-        draw_rect(Rect2(rect.position, Vector2(3.0, block_size.y)), Color("#ffffff"))
-        draw_rect(Rect2(rect.position + Vector2(0, block_size.y - 3.0), Vector2(block_size.x, 3.0)), Color("#7d8799"))
+    draw_string(font, Vector2(22, 27), "REBOUND", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("#eef5ff"))
+    draw_string(font, Vector2(22, 49), "WAVE %02d   SCORE %05d" % [wave, score], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#94a6bd"))
+    draw_string(font, Vector2(view.x - 130, 29), "HP  " + "◆".repeat(hp) + "◇".repeat(3 - hp), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#ff7c86"))
+    if banner_time > 0.0:
+        draw_string(font, Vector2(0, view.y * 0.19), banner, HORIZONTAL_ALIGNMENT_CENTER, view.x, 19, Color("#a9f5ff"))
+    # Mobile touch controls, deliberately large and simple.
+    draw_circle(Vector2(view.x * 0.16, view.y * 0.72), 54.0, Color(0.25, 0.38, 0.52, 0.16))
+    draw_arc(Vector2(view.x * 0.16, view.y * 0.72), 54.0, 0.0, TAU, 48, Color(0.48, 0.65, 0.82, 0.42), 2.0, true)
+    draw_circle(Vector2(view.x * 0.16, view.y * 0.72) + touch_move * 26.0, 20.0, Color(0.66, 0.85, 1.0, 0.55))
+    draw_circle(Vector2(view.x * 0.84, view.y * 0.72), 43.0, Color(0.20, 0.90, 1.0, 0.10))
+    draw_arc(Vector2(view.x * 0.84, view.y * 0.72), 43.0, 0.0, TAU, 48, Color("#67efff"), 2.0, true)
+    draw_string(font, Vector2(view.x * 0.84 - 28, view.y * 0.72 + 5), "PARRY", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#d9fbff"))
+    draw_circle(Vector2(view.x * 0.91, view.y * 0.48), 31.0, Color(0.63, 0.49, 1.0, 0.12))
+    draw_arc(Vector2(view.x * 0.91, view.y * 0.48), 31.0, 0.0, TAU, 40, Color("#bca4ff"), 2.0, true)
+    draw_string(font, Vector2(view.x * 0.91 - 19, view.y * 0.48 + 5), "DASH", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#eee5ff"))
+    if game_over:
+        draw_rect(Rect2(Vector2.ZERO, view), Color(0.01, 0.02, 0.04, 0.72))
+        draw_string(font, Vector2(0, view.y * 0.44), "SIGNAL LOST", HORIZONTAL_ALIGNMENT_CENTER, view.x, 32, Color("#ff7581"))
+        draw_string(font, Vector2(0, view.y * 0.51), "SCORE %05d  •  WAVE %02d" % [score, wave], HORIZONTAL_ALIGNMENT_CENTER, view.x, 18, Color("#eef5ff"))
+        draw_string(font, Vector2(0, view.y * 0.59), "TAP OR PRESS R TO RETRY", HORIZONTAL_ALIGNMENT_CENTER, view.x, 16, Color("#9defff"))
