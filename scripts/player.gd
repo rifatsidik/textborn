@@ -87,23 +87,16 @@ func _draw() -> void:
 
     var ink := Color(0.91, 0.93, 0.96, 1.0)
 
-    # Filled glyph masses make anatomy read as a continuous silhouette,
-    # instead of disconnected lines of punctuation.
+    # Sparse line-art: contours establish anatomy; interior stays mostly black.
     _glyph_ellipse(head, Vector2(7.0, 9.5), 0.0, ink, 3)
     _glyph_ellipse(neck, Vector2(3.0, 4.0), 0.0, ink, 5)
-
-    _glyph_polygon(PackedVector2Array([
-        sternum + Vector2(-10, -1), sternum + Vector2(10, -1),
-        pelvis + Vector2(7, 0), pelvis + Vector2(-7, 0)
-    ]), ink, 11, 2.4)
-    _glyph_polygon(PackedVector2Array([
-        sternum + Vector2(-9, 0), sternum + Vector2(-3, 0),
-        left_hip + Vector2(-2, 1), left_hip + Vector2(-6, 1)
-    ]), ink, 17, 2.2)
-    _glyph_polygon(PackedVector2Array([
-        sternum + Vector2(3, 0), sternum + Vector2(9, 0),
-        right_hip + Vector2(6, 1), right_hip + Vector2(2, 1)
-    ]), ink, 23, 2.2)
+    _glyph_segment(sternum + Vector2(-10, -1), sternum + Vector2(10, -1), 7, ink, 11)
+    _glyph_segment(sternum + Vector2(-10, -1), pelvis + Vector2(-6, 0), 9, ink, 13)
+    _glyph_segment(sternum + Vector2(10, -1), pelvis + Vector2(6, 0), 9, ink, 17)
+    _glyph_segment(pelvis + Vector2(-6, 0), pelvis + Vector2(6, 0), 7, ink, 19)
+    # Tiny internal marks suggest structure without creating a solid silhouette.
+    _glyph_segment(sternum + Vector2(-5, 9), sternum + Vector2(4, 9), 3, ink, 23)
+    _glyph_segment(sternum + Vector2(-4, 17), sternum + Vector2(3, 17), 3, ink, 27)
 
     _glyph_limb(left_shoulder, left_elbow, 3.8, ink, 29)
     _glyph_limb(left_elbow, left_hand, 3.0, ink, 31)
@@ -124,19 +117,14 @@ func _draw() -> void:
     _glyph_text(head + Vector2(2.0, 1), ".", ink, 73)
 
 func _glyph_ellipse(center: Vector2, radius: Vector2, _unused: float, ink: Color, seed: int) -> void:
-    var spacing := 3.0
-    var y := -radius.y
-    var row := 0
-    while y <= radius.y:
-        var x := -radius.x
-        while x <= radius.x:
-            var normalized := Vector2(x / radius.x, y / radius.y)
-            if normalized.length_squared() <= 1.0:
-                var p := center + Vector2(x, y)
-                _glyph_text(p, GLYPHS[posmod(seed + row * 7 + int((x + radius.x) * 3.0), GLYPHS.size())], ink, seed + row)
-            x += spacing
-        y += spacing
-        row += 1
+    # Contour-only glyph ring leaves negative space inside the head and neck.
+    var count := 28
+    for i in range(count):
+        if i % 7 == 0:
+            continue
+        var angle := TAU * float(i) / float(count)
+        var p := center + Vector2(cos(angle) * radius.x, sin(angle) * radius.y)
+        _glyph_text(p, GLYPHS[posmod(seed + i, GLYPHS.size())], ink, seed + i)
 
 func _glyph_polygon(points: PackedVector2Array, ink: Color, seed: int, spacing: float) -> void:
     if points.size() < 3:
@@ -162,19 +150,25 @@ func _glyph_polygon(points: PackedVector2Array, ink: Color, seed: int, spacing: 
         row += 1
 
 func _glyph_limb(a: Vector2, b: Vector2, width: float, ink: Color, seed: int) -> void:
+    # Two narrow contour rails, tapered at joints, with sparse interior hatching.
     var direction := b - a
     var length := direction.length()
     if length < 0.1:
         return
     var normal := direction.normalized().orthogonal()
-    var steps := maxi(2, int(length / 3.0))
-    var across := maxi(2, int(width / 2.5))
+    var steps := maxi(3, int(length / 3.5))
+    var half_width := width * 0.5
     for i in range(steps + 1):
         var t := float(i) / float(steps)
-        for j in range(-across, across + 1):
-            var p := a.lerp(b, t) + normal * float(j) * 2.2
-            if absf(float(j)) <= float(across) * (0.8 + 0.2 * sin(t * PI)):
-                _glyph_text(p, GLYPHS[posmod(seed + i * 3 + j + across, GLYPHS.size())], ink, seed + i + j)
+        var center := a.lerp(b, t)
+        var taper := 0.72 + 0.28 * sin(t * PI)
+        var edge := normal * half_width * taper
+        if i % 5 != 0:
+            _glyph_text(center + edge, GLYPHS[posmod(seed + i, GLYPHS.size())], ink, seed + i)
+            _glyph_text(center - edge, GLYPHS[posmod(seed + i + 3, GLYPHS.size())], ink, seed + i + 3)
+        if i % 4 == 0:
+            var shade := Color(ink.r * 0.72, ink.g * 0.72, ink.b * 0.72, ink.a)
+            _glyph_text(center, GLYPHS[posmod(seed + i + 6, GLYPHS.size())], shade, seed + i + 6)
 
 func _glyph_segment(a: Vector2, b: Vector2, count: int, ink: Color, seed: int) -> void:
     for i in range(count):
