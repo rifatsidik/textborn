@@ -1,45 +1,43 @@
 extends RefCounted
 class_name TextbornCharacterRig
 
-# A restrained walk cycle for a slightly elevated side view.
-# Equal segment lengths and modest foot travel prevent knees snapping outward.
-const THIGH_LENGTH: float = 23.0
-const CALF_LENGTH: float = 23.0
-const FOOT_REST_Y: float = -5.0
-const STEP_REACH: float = 6.0
-const STEP_LIFT: float = 3.0
+# Procedural 2D character rig. All dimensions are in world pixels.
+# Walk uses explicit stance/swing phases instead of a free-running sine wave.
+const HIP_Y := -48.0
+const CHEST_Y := -79.0
+const HEAD_Y := -111.0
+const THIGH := 22.0
+const SHIN := 23.0
+const STEP_LENGTH := 18.0
+const STEP_HEIGHT := 5.0
+const STANCE_FRACTION := 0.62
 
 func build_pose(gait: float, blend: float) -> Dictionary:
-    var phase := fposmod(gait, TAU)
-    var stride := sin(phase)
-    var opposite_stride := sin(phase + PI)
-    var bob := (0.5 - 0.5 * cos(phase * 2.0)) * 0.35 * blend
+    var phase := fposmod(gait / TAU, 1.0)
+    var bob := (0.5 - 0.5 * cos(gait * 2.0)) * 0.8 * blend
+    var pelvis := Vector2(0.0, HIP_Y + bob)
+    var chest := Vector2(-sin(gait) * 0.7 * blend, CHEST_Y + bob)
+    var neck := chest + Vector2(0.0, -6.0)
+    var head := Vector2(0.0, HEAD_Y + bob)
 
-    var pelvis := Vector2(0.0, -49.0 + bob)
-    var chest := Vector2(-stride * 0.18 * blend, -82.0 + bob)
-    var neck := chest + Vector2(0.0, -7.0)
-    var head := neck + Vector2(0.0, -13.0)
-
+    # Near/far hips are close together in a side-on view, not spread laterally.
     var near_hip := pelvis + Vector2(2.0, 0.0)
-    var far_hip := pelvis + Vector2(-2.0, 0.6)
+    var far_hip := pelvis + Vector2(-1.8, 0.8)
+    var near_foot := _foot_target(phase, blend, 1.0)
+    var far_foot := _foot_target(fposmod(phase + 0.5, 1.0), blend, -1.0)
+    var near_ankle := near_foot + Vector2(2.0, 0.0)
+    var far_ankle := far_foot + Vector2(-1.5, 0.8)
 
-    # Opposing feet move through a small arc; swing lift is smooth and limited.
-    var near_lift := pow(maxf(0.0, stride), 1.5) * STEP_LIFT * blend
-    var far_lift := pow(maxf(0.0, opposite_stride), 1.5) * STEP_LIFT * blend
-    var near_ankle := Vector2(stride * STEP_REACH + 1.5, FOOT_REST_Y - near_lift)
-    var far_ankle := Vector2(opposite_stride * STEP_REACH - 1.5, FOOT_REST_Y - far_lift)
+    var near_knee := _knee(near_hip, near_ankle, 1.0, phase, blend)
+    var far_knee := _knee(far_hip, far_ankle, -1.0, fposmod(phase + 0.5, 1.0), blend)
 
-    # Both knees bend forward in the walking direction, with subtle depth offset.
-    var near_knee := _solve_knee(near_hip, near_ankle, -1.0)
-    var far_knee := _solve_knee(far_hip, far_ankle, 1.0)
-
-    var left_shoulder := chest + Vector2(-7.0, 1.0)
-    var right_shoulder := chest + Vector2(7.0, 1.0)
-    var arm_swing := stride * 2.0 * blend
-    var left_elbow := left_shoulder + Vector2(-0.4 - arm_swing * 0.25, 11.5)
-    var right_elbow := right_shoulder + Vector2(0.4 + arm_swing * 0.25, 11.5)
-    var left_hand := left_elbow + Vector2(-arm_swing * 0.55, 10.5)
-    var right_hand := right_elbow + Vector2(arm_swing * 0.55, 10.5)
+    var left_shoulder := chest + Vector2(-6.5, 1.0)
+    var right_shoulder := chest + Vector2(6.5, 1.0)
+    var swing := sin(gait) * 3.0 * blend
+    var left_elbow := left_shoulder + Vector2(-0.6 - swing * 0.25, 11.0)
+    var right_elbow := right_shoulder + Vector2(0.6 + swing * 0.25, 11.0)
+    var left_hand := left_elbow + Vector2(-swing * 0.65, 10.0)
+    var right_hand := right_elbow + Vector2(swing * 0.65, 10.0)
 
     return {
         "head": head, "neck": neck, "chest": chest, "pelvis": pelvis,
@@ -49,15 +47,28 @@ func build_pose(gait: float, blend: float) -> Dictionary:
         "left_hip": far_hip, "right_hip": near_hip,
         "left_knee": far_knee, "right_knee": near_knee,
         "left_ankle": far_ankle, "right_ankle": near_ankle,
+        "left_foot": far_foot, "right_foot": near_foot
     }
 
-func _solve_knee(hip: Vector2, ankle: Vector2, bend_side: float) -> Vector2:
-    var delta := ankle - hip
-    var raw_distance := delta.length()
-    var min_distance := absf(THIGH_LENGTH - CALF_LENGTH) + 0.01
-    var max_distance := THIGH_LENGTH + CALF_LENGTH - 0.01
-    var distance := clampf(raw_distance, min_distance, max_distance)
-    var direction := delta / maxf(raw_distance, 0.001)
-    var along := (THIGH_LENGTH * THIGH_LENGTH - CALF_LENGTH * CALF_LENGTH + distance * distance) / (2.0 * distance)
-    var height := sqrt(maxf(0.0, THIGH_LENGTH * THIGH_LENGTH - along * along))
-    return hip + direction * along + Vector2(-direction.y, direction.x) * bend_side * height
+func _foot_target(phase: float, blend: float, side: float) -> Vector2:
+    var x: float
+    var lift := 0.0
+    if phase < STANCE_FRACTION:
+        # Foot moves backward relative to body while planted on the ground.
+        var t := phase / STANCE_FRACTION
+        x = lerpf(STEP_LENGTH * 0.5, -STEP_LENGTH * 0.5, t)
+    else:
+        # Quick smooth swing forward, with a controlled toe clearance arc.
+        var t := (phase - STANCE_FRACTION) / (1.0 - STANCE_FRACTION)
+        var smooth := t * t * (3.0 - 2.0 * t)
+        x = lerpf(-STEP_LENGTH * 0.5, STEP_LENGTH * 0.5, smooth)
+        lift = sin(PI * t) * STEP_HEIGHT
+    return Vector2(x * blend, -lift * blend)
+
+func _knee(hip: Vector2, ankle: Vector2, side: float, phase: float, blend: float) -> Vector2:
+    var mid := hip.lerp(ankle, 0.52)
+    var swing_phase := fposmod(phase - STANCE_FRACTION, 1.0 - STANCE_FRACTION) / (1.0 - STANCE_FRACTION)
+    var bend := 1.0 if phase >= STANCE_FRACTION else 0.0
+    # Knees flex forward only in swing; slight far-side offset provides depth.
+    var forward := (2.0 + sin(swing_phase * PI) * 4.0) * bend * blend
+    return Vector2(mid.x + forward + side * 0.7, mid.y - bend * 1.0)
