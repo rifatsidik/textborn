@@ -215,7 +215,7 @@ func _glyph_segment(a: Vector2, b: Vector2, count: int, ink: Color, seed: int) -
             sin(float(i * 7 + seed)) * 2.0,
             cos(float(i * 11 + seed)) * 2.0
         )
-        var glyph := GLYPHS[posmod(i * 7 + seed, GLYPHS.size())]
+        var glyph: String = str(GLYPHS[posmod(i * 7 + seed, GLYPHS.size())])
         _glyph_text(p + offset, glyph, ink, seed + i)
 
 func _glyph_ellipse(center: Vector2, radius: Vector2, count: int, ink: Color, seed: int) -> void:
