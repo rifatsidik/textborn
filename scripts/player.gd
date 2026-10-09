@@ -87,33 +87,45 @@ func _draw() -> void:
 
     var ink := Color(0.91, 0.93, 0.96, 1.0)
 
-    # Sparse line-art: contours establish anatomy; interior stays mostly black.
-    _glyph_ellipse(head, Vector2(7.0, 9.5), 0.0, ink, 3)
-    _glyph_ellipse(neck, Vector2(3.0, 4.0), 0.0, ink, 5)
-    _glyph_segment(sternum + Vector2(-10, -1), sternum + Vector2(10, -1), 7, ink, 11)
-    _glyph_segment(sternum + Vector2(-10, -1), pelvis + Vector2(-6, 0), 9, ink, 13)
-    _glyph_segment(sternum + Vector2(10, -1), pelvis + Vector2(6, 0), 9, ink, 17)
-    _glyph_segment(pelvis + Vector2(-6, 0), pelvis + Vector2(6, 0), 7, ink, 19)
-    # Tiny internal marks suggest structure without creating a solid silhouette.
-    _glyph_segment(sternum + Vector2(-5, 9), sternum + Vector2(4, 9), 3, ink, 23)
-    _glyph_segment(sternum + Vector2(-4, 17), sternum + Vector2(3, 17), 3, ink, 27)
+    # Human contour first: head, neck, shoulder line, ribcage, waist and pelvis.
+    _glyph_ellipse(head, Vector2(6.2, 8.2), 0.0, ink, 3)
+    _glyph_path(PackedVector2Array([
+        neck + Vector2(-2.5, -1), sternum + Vector2(-7.0, -1),
+        sternum + Vector2(-11.0, 3), sternum + Vector2(-8.5, 14),
+        pelvis + Vector2(-5.5, -1), pelvis + Vector2(5.5, -1),
+        sternum + Vector2(8.5, 14), sternum + Vector2(11.0, 3),
+        sternum + Vector2(7.0, -1), neck + Vector2(2.5, -1)
+    ]), ink, 11, true)
+    _glyph_path(PackedVector2Array([
+        pelvis + Vector2(-5.5, -1), left_hip + Vector2(-4.0, 2),
+        left_hip + Vector2(1.0, 8), right_hip + Vector2(-1.0, 8),
+        right_hip + Vector2(4.0, 2), pelvis + Vector2(5.5, -1)
+    ]), ink, 19, true)
 
-    _glyph_limb(left_shoulder, left_elbow, 3.8, ink, 29)
+    # Arms read as tapered limbs with joints, rather than thick glyph bundles.
+    _glyph_limb(left_shoulder, left_elbow, 4.0, ink, 29)
     _glyph_limb(left_elbow, left_hand, 3.0, ink, 31)
-    _glyph_limb(right_shoulder, right_elbow, 3.8, ink, 37)
+    _glyph_limb(right_shoulder, right_elbow, 4.0, ink, 37)
     _glyph_limb(right_elbow, right_hand, 3.0, ink, 41)
 
-    _glyph_limb(left_hip, left_knee, 4.8, ink, 43)
-    _glyph_limb(left_knee, left_ankle, 3.7, ink, 47)
-    _glyph_limb(right_hip, right_knee, 4.8, ink, 53)
-    _glyph_limb(right_knee, right_ankle, 3.7, ink, 59)
+    # Leg contour and a restrained centerline for knee articulation.
+    _glyph_limb(left_hip, left_knee, 4.5, ink, 43)
+    _glyph_limb(left_knee, left_ankle, 3.2, ink, 47)
+    _glyph_limb(right_hip, right_knee, 4.5, ink, 53)
+    _glyph_limb(right_knee, right_ankle, 3.2, ink, 59)
 
-    # Small, restrained feet; no oversized hands, face, or weapon effects.
-    _glyph_segment(left_ankle, left_ankle + Vector2(7, 0), 5, ink, 61)
-    _glyph_segment(right_ankle, right_ankle + Vector2(7, 0), 5, ink, 67)
+    # Feet remain small and nearly horizontal.
+    _glyph_path(PackedVector2Array([
+        left_ankle + Vector2(-2, 0), left_ankle + Vector2(6, 0),
+        left_ankle + Vector2(8, 2)
+    ]), ink, 61, false)
+    _glyph_path(PackedVector2Array([
+        right_ankle + Vector2(-2, 0), right_ankle + Vector2(6, 0),
+        right_ankle + Vector2(8, 2)
+    ]), ink, 67, false)
 
-    # Minimal face marks, kept subordinate to the silhouette.
-    _glyph_text(head + Vector2(-3.2, 1), ".", ink, 71)
+    # Face details are tiny so the head stays human-scaled.
+    _glyph_text(head + Vector2(-2.5, 1), ".", ink, 71)
     _glyph_text(head + Vector2(2.0, 1), ".", ink, 73)
 
 func _glyph_ellipse(center: Vector2, radius: Vector2, _unused: float, ink: Color, seed: int) -> void:
@@ -169,6 +181,17 @@ func _glyph_limb(a: Vector2, b: Vector2, width: float, ink: Color, seed: int) ->
         if i % 4 == 0:
             var shade := Color(ink.r * 0.72, ink.g * 0.72, ink.b * 0.72, ink.a)
             _glyph_text(center, GLYPHS[posmod(seed + i + 6, GLYPHS.size())], shade, seed + i + 6)
+
+func _glyph_path(points: PackedVector2Array, ink: Color, seed: int, closed: bool) -> void:
+    if points.size() < 2:
+        return
+    for i in range(points.size() - 1):
+        var length := points[i].distance_to(points[i + 1])
+        var count := maxi(2, int(length / 4.0))
+        _glyph_segment(points[i], points[i + 1], count, ink, seed + i * 7)
+    if closed:
+        var length := points[points.size() - 1].distance_to(points[0])
+        _glyph_segment(points[points.size() - 1], points[0], maxi(2, int(length / 4.0)), ink, seed + points.size() * 7)
 
 func _glyph_segment(a: Vector2, b: Vector2, count: int, ink: Color, seed: int) -> void:
     for i in range(count):
