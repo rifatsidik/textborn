@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="BLADE SYMPHONY"
-run/main_scene="res://prototypes/blade_symphony.tscn"
+config/name="LIGHTNING SURVIVOR"
+run/main_scene="res://prototypes/lightning_survivor.tscn"
 config/features=PackedStringArray("4.7")
 
 [display]
