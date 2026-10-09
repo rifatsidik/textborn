@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="WRECKLINE"
-run/main_scene="res://prototypes/wreckline.tscn"
+config/name="IMPACT ZERO"
+run/main_scene="res://prototypes/impact_zero.tscn"
 config/features=PackedStringArray("4.7")
 
 [display]
