@@ -119,6 +119,8 @@ func _fire_core() -> void:
     orb.linear_damp = 0.05
     orb.collision_layer = 2
     orb.collision_mask = 1
+    orb.contact_monitor = true
+    orb.max_contacts_reported = 4
     add_child(orb)
     var collision := CollisionShape2D.new()
     var circle := CircleShape2D.new()
