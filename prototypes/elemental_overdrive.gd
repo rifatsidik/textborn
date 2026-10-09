@@ -37,7 +37,7 @@ var move_touch := false
 var touch_origin := Vector2.ZERO
 var touch_pos := Vector2.ZERO
 var banner := "ELEMENTAL OVERDRIVE  //  BUILD YOUR COMBO"
-var banner_timerr := 4.0
+var banner_timer := 4.0
 var reward_choices: Array[int] = []
 var upgrades := {"damage": 0, "chain": 0, "targets": 0, "cooldown": 0}
 var time_alive := 0.0
@@ -58,7 +58,7 @@ func _spawn_wave() -> void:
         else: pos = Vector2(28, randf_range(95, view_size.y-25))
         enemies.append({"pos":pos,"vel":Vector2.ZERO,"hp":2 + int(wave > 3),"alive":true,"flash":0.0,"kind":randi()%3,"r":randf_range(12.0,17.0)})
     banner = "WAVE " + str(wave) + "  //  SURVIVE AND BUILD"
-    banner_timerr = 2.0
+    banner_timer = 2.0
 
 func _process(dt: float) -> void:
     view_size = get_viewport_rect().size
@@ -67,7 +67,7 @@ func _process(dt: float) -> void:
         queue_redraw()
         return
     time_alive += dt
-    banner_timerr = maxf(0.0, banner_timerr-dt)
+    banner_timer = maxf(0.0, banner_timer-dt)
     shake = maxf(0.0, shake-dt*18.0)
     attack_timer = maxf(0.0, attack_timer-dt)
     for i in range(cooldowns.size()):
@@ -119,7 +119,7 @@ func _process(dt: float) -> void:
         if kills >= 20 and not red_evolved:
             red_evolved = true
             banner = "EVOLUTION UNLOCKED  //  CRIMSON LIGHTNING"
-            banner_timerr = 3.0
+            banner_timer = 3.0
     queue_redraw()
 
 func _input(event: InputEvent) -> void:
@@ -189,11 +189,11 @@ func _select_skill(idx: int) -> void:
     if idx < 0 or idx >= 4 or combo_running: return
     if cooldowns[idx] > 0:
         banner = SKILL_NAMES[idx] + " ON COOLDOWN"
-        banner_timerr = 1.0
+        banner_timer = 1.0
         return
     selected_skill = idx
     banner = "SELECTED " + SKILL_NAMES[idx] + "  //  TAP A SLOT"
-    banner_timerr = 1.0
+    banner_timer = 1.0
 
 func _put_skill_in_slot(skill: int, slot: int) -> void:
     if combo_running or cooldowns[skill] > 0: return
@@ -207,23 +207,23 @@ func _put_skill_in_slot(skill: int, slot: int) -> void:
         banner = "COMBO READY  //  EXECUTE WHEN YOU CHOOSE"
     else:
         banner = "SKILL QUEUED"
-    banner_timerr = 1.1
+    banner_timer = 1.1
 
 func _execute_combo() -> void:
     if combo_running or combo_queue.size() < 2: 
         banner = "QUEUE AT LEAST 2 READY SKILLS"
-        banner_timerr = 1.2
+        banner_timer = 1.2
         return
     for skill in combo_queue:
         if cooldowns[skill] > 0:
             banner = "ONE OR MORE SKILLS ON COOLDOWN"
-            banner_timerr = 1.2
+            banner_timer = 1.2
             return
     combo_steps = combo_queue.duplicate()
     combo_step = 0
     combo_running = true
     banner = "COMBO EXECUTION!"
-    banner_timerr = 1.0
+    banner_timer = 1.0
     _execute_next()
 
 func _execute_next() -> void:
@@ -232,7 +232,7 @@ func _execute_next() -> void:
         combo_queue.clear()
         combo_steps.clear()
         banner = "COMBO COMPLETE"
-        banner_timerr = 1.0
+        banner_timer = 1.0
         return
     var skill: int = combo_steps[combo_step]
     cooldowns[skill] = maxf(1.0, SKILL_COOLDOWNS[skill] - float(upgrades["cooldown"])*0.7)
@@ -337,7 +337,7 @@ func _open_reward() -> void:
     reward_open = true
     reward_choices = [randi()%4, randi()%4, randi()%4]
     banner = "LEVEL UP  //  CHOOSE ONE UPGRADE"
-    banner_timerr = 2.0
+    banner_timer = 2.0
 
 func _choose_reward(index: int) -> void:
     if not reward_open or index < 0 or index >= 3: return
@@ -445,7 +445,7 @@ func _draw() -> void:
     draw_rect(Rect2(size.x-220,size.y-112,195,44),Color("#202b42"),true)
     draw_string(ThemeDB.fallback_font,Vector2(size.x-122,size.y-84),"CLEAR QUEUE",HORIZONTAL_ALIGNMENT_CENTER,-1,14,Color("#b9c9e8"))
 
-    if banner_timerr > 0:
+    if banner_timer > 0:
         draw_string(ThemeDB.fallback_font,Vector2(size.x*0.5,190),banner,HORIZONTAL_ALIGNMENT_CENTER,-1,18,Color.WHITE)
     # Touch movement guide
     draw_circle(Vector2(95,size.y-110),49,Color(0.12,0.7,1,0.08))
