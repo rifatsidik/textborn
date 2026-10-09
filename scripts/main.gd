@@ -68,6 +68,9 @@ func _spawn_tower() -> void:
             shape.size = Vector2(bw, bh)
             collision.shape = shape
             block.add_child(collision)
+            var block_visual := BlockVisual.new()
+            block_visual.block_size = Vector2(bw, bh)
+            block.add_child(block_visual)
             blocks.append(block)
 
 func _process(delta: float) -> void:
@@ -252,3 +255,14 @@ class CoreVisual extends Node2D:
         draw_circle(Vector2.ZERO, 12.0, Color(0.15, 0.76, 1.0, 0.3))
         draw_circle(Vector2.ZERO, 7.0, Color("#8deaff"))
         draw_circle(Vector2.ZERO, 3.0, Color.WHITE)
+
+
+class BlockVisual extends Node2D:
+    var block_size := Vector2(38.0, 30.0)
+
+    func _draw() -> void:
+        var rect := Rect2(-block_size * 0.5, block_size)
+        draw_rect(rect, Color("#d5dbe6"))
+        draw_rect(Rect2(rect.position, Vector2(block_size.x, 3.0)), Color("#ffffff"))
+        draw_rect(Rect2(rect.position, Vector2(3.0, block_size.y)), Color("#ffffff"))
+        draw_rect(Rect2(rect.position + Vector2(0, block_size.y - 3.0), Vector2(block_size.x, 3.0)), Color("#7d8799"))
