@@ -40,13 +40,10 @@ func _physics_process(delta: float) -> void:
 
     if Input.is_action_just_pressed("ui_accept") and is_on_floor():
         velocity.y = JUMP_SPEED
-    if Input.is_action_just_pressed("ui_focus_next"):
-        if is_grappling:
-            is_grappling = false
-        else:
-            _try_grapple()
     if Input.is_key_pressed(KEY_E) and not is_grappling:
         _try_grapple()
+    if Input.is_action_just_pressed("ui_focus_next"):
+        is_grappling = false
     if Input.is_key_pressed(KEY_Q) and is_grappling:
         is_grappling = false
 
