@@ -49,10 +49,10 @@ func _physics_process(delta: float) -> void:
         velocity.y = JUMP_SPEED
 
     var moving := absf(velocity.x) > 8.0 and is_on_floor()
-    walk_blend = move_toward(walk_blend, 1.0 if moving else 0.0, delta * 3.8)
+    walk_blend = move_toward(walk_blend, 1.0 if moving else 0.0, delta * 5.0)
     if moving:
         # One full gait cycle per stride rhythm; restrained cadence.
-        var gait_rate := (TAU * absf(velocity.x)) / 62.0
+        var gait_rate := (TAU * absf(velocity.x)) / 36.0
         gait_phase = fposmod(gait_phase + delta * gait_rate, TAU)
 
     move_and_slide()
