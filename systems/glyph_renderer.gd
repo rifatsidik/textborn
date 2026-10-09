@@ -3,7 +3,7 @@ class_name TextbornGlyphRenderer
 
 # Character is drawn only with font glyphs. Contours are deliberately clean and
 # anatomical; random-looking glyph noise is kept out of joints and face.
-const FONT_SIZE := 11
+const FONT_SIZE := 9
 const CONTOUR_GLYPHS: Array[String] = ["|", "/", "\\", "(", ")", "—", ".", ":"]
 const DETAIL_GLYPHS: Array[String] = [".", ":", "·", "|"]
 
@@ -47,11 +47,11 @@ func _draw() -> void:
         head + Vector2(-4.5, 2.0), head + Vector2(-3.2, 5.0),
         head + Vector2(0.0, 7.0), head + Vector2(3.2, 5.0),
         head + Vector2(4.5, 2.0)
-    ]), mid, 5, false, 3.2)
+    ]), mid, 5, false, 4.0)
     _path(PackedVector2Array([
         head + Vector2(-4.5, -3.5), head + Vector2(-2.0, -7.0),
         head + Vector2(1.5, -7.3), head + Vector2(4.6, -4.0)
-    ]), mid, 9, false, 3.0)
+    ]), mid, 9, false, 4.0)
     _glyph(head + Vector2(-2.4, 0.5), ".", mid, 11)
     _glyph(head + Vector2(1.5, 0.5), ".", mid, 12)
 
@@ -76,7 +76,7 @@ func _draw() -> void:
     _limb(le, lh, 2.7, ink, 37)
     _limb(rs, re, 3.5, ink, 41)
     _limb(re, rh, 2.7, ink, 43)
-    _path(PackedVector2Array([lh + Vector2(-1.0, -1.0), lh + Vector2(0.5, 2.0), lh + Vector2(1.5, 3.5)]), mid, 47, false, 2.8)
+    _path(PackedVector2Array([lh + Vector2(-1.0, -1.0), lh + Vector2(0.5, 2.0), lh + Vector2(1.5, 3.5)]), mid, 47, false, 3.8)
     _path(PackedVector2Array([rh + Vector2(-1.0, -1.0), rh + Vector2(0.5, 2.0), rh + Vector2(1.5, 3.5)]), ink, 49, false, 2.8)
 
     # Far leg first, then near leg. Matched widths and lengths avoid the
@@ -101,7 +101,7 @@ func _limb(a: Vector2, b: Vector2, width: float, color: Color, seed: int) -> voi
     if delta.length() < 0.1:
         return
     var normal := delta.normalized().orthogonal()
-    var count := maxi(4, int(delta.length() / 3.0))
+    var count := maxi(4, int(delta.length() / 4.0))
     for i in range(count + 1):
         var t := float(i) / float(count)
         var center := a.lerp(b, t)
@@ -111,8 +111,8 @@ func _limb(a: Vector2, b: Vector2, width: float, color: Color, seed: int) -> voi
         var glyph_b := CONTOUR_GLYPHS[posmod(seed + i + 3, CONTOUR_GLYPHS.size())]
         _glyph(center + offset, glyph_a, color, seed + i)
         _glyph(center - offset, glyph_b, color, seed + i + 3)
-        if i % 5 == 0 and t > 0.12 and t < 0.88:
-            _glyph(center, DETAIL_GLYPHS[posmod(seed + i, DETAIL_GLYPHS.size())], color.darkened(0.25), seed + i + 5)
+        if i % 7 == 0 and t > 0.18 and t < 0.82:
+            _glyph(center, DETAIL_GLYPHS[posmod(seed + i, DETAIL_GLYPHS.size())], color.darkened(0.12), seed + i + 5)
 
 func _foot(ankle: Vector2, color: Color, seed: int) -> void:
     _path(PackedVector2Array([
