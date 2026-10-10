@@ -11,7 +11,7 @@ var elapsed: float = 0.0
 
 func _ready() -> void:
 	player = GlyphHuman.new()
-	player.position = Vector2(470.0, 390.0)
+	player.position = Vector2(470.0, 570.0)
 	add_child(player)
 	player.set("animation_mode", "IDLE")
 	player.set("glyph_density", 1.0)
